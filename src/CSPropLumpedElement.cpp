@@ -31,6 +31,8 @@ void CSPropLumpedElement::Init()
 	m_R.SetValue(NAN);
 	m_C.SetValue(NAN);
 	m_L.SetValue(NAN);
+
+	e_LEtype = LEtype::INVALID;
 }
 
 bool CSPropLumpedElement::Update(std::string *ErrStr)
@@ -92,6 +94,11 @@ bool CSPropLumpedElement::Write2XML(TiXmlNode& root, bool parameterised, bool sp
 	WriteTerm(m_C,*prop,"C",parameterised);
 	WriteTerm(m_L,*prop,"L",parameterised);
 
+	// Write down the numeric value LEtype
+	ParameterScalar s_LEtype;
+	s_LEtype.SetValue(int(this->e_LEtype));
+	WriteTerm(s_LEtype,*prop,"LEtype",parameterised);
+
 	return true;
 }
 
@@ -114,6 +121,32 @@ bool CSPropLumpedElement::ReadFromXML(TiXmlNode &root)
 		m_C.SetValue(NAN);
 	if (ReadTerm(m_L,*prop,"L")==false)
 		m_L.SetValue(NAN);
+
+	// Read RLC type, "parallel" or "series"
+	ParameterScalar s_LEtype;
+
+	// The default is a parallel lumped circuit.
+	if (ReadTerm(s_LEtype,*prop,"LEtype")==false)
+		e_LEtype = LEtype::PARALLEL;
+	else
+	{
+		int i_RLCtype = (int)(s_LEtype.GetValue());
+
+		if (i_RLCtype == 0)
+			e_LEtype = LEtype::PARALLEL;
+		else if (i_RLCtype == 1)
+			e_LEtype = LEtype::SERIES;
+		else
+			e_LEtype = LEtype::INVALID;
+	}
+
+	// Here is the tricky part. If this is anything else than a parallel RC,
+	// then another type descriptor is necessary, to invoke an engine extension.
+	// With additional modifications to the LumpedElement functionality, this
+	// condition will have to change further.
+	if ((m_L.GetValue() > 0.0) || (e_LEtype == LEtype::SERIES))
+		Type = (CSProperties::PropertyType)(LUMPED_ELEMENT | LUMPED_RLC);
+
 	return true;
 }
 
@@ -125,4 +158,18 @@ void CSPropLumpedElement::ShowPropertyStatus(std::ostream& stream)
 	stream << "  Resistance: " << m_R.GetValueString() << std::endl;
 	stream << "  Capacity: "   << m_C.GetValueString() << std::endl;
 	stream << "  Inductance: " << m_L.GetValueString() << std::endl;
+
+	std::string	s_type;
+	switch (this->e_LEtype){
+		case LEtype::PARALLEL:
+			s_type = "Parallel";
+			break;
+		case LEtype::SERIES:
+			s_type = "Series";
+			break;
+		case LEtype::INVALID:
+			s_type = "Invalid";
+			break;
+	}
+	stream << "  Type: " << s_type << std::endl;
 }
